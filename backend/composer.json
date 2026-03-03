@@ -1,0 +1,8 @@
+{
+  \"name\": \"taller/backend\",
+  \"type\": \"project\",
+  \"description\": \"API Laravel para gestion de taller\",
+  \"require\": {
+    \"php\": \"^8.2\"
+  }
+}
