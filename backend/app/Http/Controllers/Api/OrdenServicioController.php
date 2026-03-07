@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActualizacionOrden;
+use App\Models\Cliente;
 use App\Models\OrdenServicio;
+use App\Models\Vehiculo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,8 +37,23 @@ class OrdenServicioController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'cliente_id' => ['required', 'integer', 'exists:clientes,id'],
-            'vehiculo_id' => ['required', 'integer', 'exists:vehiculos,id'],
+            'cliente_id' => ['nullable', 'integer'],
+            'nuevo_cliente' => ['nullable', 'array'],
+            'nuevo_cliente.nombre' => ['required_without:cliente_id', 'string', 'max:255'],
+            'nuevo_cliente.cedula' => ['required_without:cliente_id', 'string', 'max:20', 'unique:clientes,cedula'],
+            'nuevo_cliente.sexo' => ['nullable', 'string', 'max:20'],
+            'nuevo_cliente.direccion' => ['required_without:cliente_id', 'string', 'max:255'],
+            'nuevo_cliente.telefono' => ['required_without:cliente_id', 'string', 'max:20'],
+            'nuevo_cliente.email' => ['nullable', 'email', 'max:255'],
+            'vehiculo_id' => ['nullable', 'integer'],
+            'nuevo_vehiculo' => ['nullable', 'array'],
+            'nuevo_vehiculo.anio' => ['required_without:vehiculo_id', 'integer', 'between:1900,2100'],
+            'nuevo_vehiculo.marca' => ['required_without:vehiculo_id', 'string', 'max:100'],
+            'nuevo_vehiculo.modelo' => ['required_without:vehiculo_id', 'string', 'max:100'],
+            'nuevo_vehiculo.matricula' => ['required_without:vehiculo_id', 'string', 'max:30', 'unique:vehiculos,matricula'],
+            'nuevo_vehiculo.color' => ['required_without:vehiculo_id', 'string', 'max:50'],
+            'nuevo_vehiculo.combustible' => ['nullable', 'string', 'max:30'],
+            'nuevo_vehiculo.chasis' => ['nullable', 'string', 'max:60'],
             'mecanico_principal_id' => ['nullable', 'integer', 'exists:mecanicos,id'],
             'tipo_servicio' => ['required', 'string', 'max:50'],
             'descripcion' => ['nullable', 'string'],
@@ -51,18 +68,47 @@ class OrdenServicioController extends Controller
         ]);
 
         $orden = DB::transaction(function () use ($validated) {
-            $vehiculoClienteId = (int) DB::table('vehiculos')
-                ->where('id', $validated['vehiculo_id'])
-                ->value('cliente_id');
+            $clienteId = null;
+            if (! empty($validated['cliente_id'])) {
+                $clienteId = Cliente::where('id', (int) $validated['cliente_id'])->value('id');
+            }
 
-            if ($vehiculoClienteId !== (int) $validated['cliente_id']) {
-                abort(422, 'El vehiculo no pertenece al cliente seleccionado.');
+            if (! $clienteId) {
+                if (empty($validated['nuevo_cliente'])) {
+                    abort(422, 'El ID de cliente no existe. Completa "nuevo cliente" para crearlo.');
+                }
+                $cliente = Cliente::create($validated['nuevo_cliente']);
+                $clienteId = (int) $cliente->id;
+            }
+
+            $vehiculoId = null;
+            if (! empty($validated['vehiculo_id'])) {
+                $vehiculoId = Vehiculo::where('id', (int) $validated['vehiculo_id'])->value('id');
+            }
+
+            if ($vehiculoId) {
+                $vehiculoClienteId = (int) DB::table('vehiculos')
+                    ->where('id', $vehiculoId)
+                    ->value('cliente_id');
+
+                if ($vehiculoClienteId !== (int) $clienteId) {
+                    abort(422, 'El vehiculo no pertenece al cliente seleccionado.');
+                }
+            } else {
+                if (empty($validated['nuevo_vehiculo'])) {
+                    abort(422, 'El ID de vehiculo no existe. Completa "nuevo vehiculo" para crearlo.');
+                }
+                $vehiculo = Vehiculo::create([
+                    ...$validated['nuevo_vehiculo'],
+                    'cliente_id' => $clienteId,
+                ]);
+                $vehiculoId = $vehiculo->id;
             }
 
             $orden = OrdenServicio::create([
                 'codigo' => $this->generarCodigo(),
-                'cliente_id' => $validated['cliente_id'],
-                'vehiculo_id' => $validated['vehiculo_id'],
+                'cliente_id' => $clienteId,
+                'vehiculo_id' => $vehiculoId,
                 'mecanico_principal_id' => $validated['mecanico_principal_id'] ?? null,
                 'tipo_servicio' => $validated['tipo_servicio'],
                 'descripcion' => $validated['descripcion'] ?? null,
