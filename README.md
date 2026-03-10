@@ -2,8 +2,6 @@
 
 ## Release Log - MVP Taller (Backend + Frontend + Auth + Demo Data)
 
-Titulo sugerido para commit:
-`feat: implementar MVP de taller con auth, ordenes, UI renovada y datos demo`
 
 ### Resumen de cambios
 - Se construyo la base funcional del sistema del taller de punta a punta.
